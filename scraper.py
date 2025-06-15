@@ -16,22 +16,60 @@ PATTERNS = {
     )
 }
 
+def read_numbers(html):
+    """
+    Reads voter, ballot envelope, and valid vote counts from municipality HTML.
+    """
+    def get_number(pattern):
+        match = re.search(pattern, html)
+        if match:
+            try:
+                return int(match.group(1).replace('&nbsp;', '').replace(' ', ''))
+            except ValueError:
+                return 0
+        return 0
+
+    return {
+        "voters": get_number(PATTERNS["voters"]),
+        "ballot_envelopes": get_number(PATTERNS["ballot_envelopes"]),
+        "valid_votes": get_number(PATTERNS["valid_votes"])
+    }
+
+def read_parties(html):
+    """
+    Reads party results (name and vote count) from municipality HTML.
+    """
+    parties = {}
+    for found_match in PATTERNS["parties"].finditer(html):
+        party_name = found_match.group(2).strip()
+        try:
+            parties[party_name] = int(found_match.group(3).replace('&nbsp;', '').replace(' ', ''))
+        except ValueError:
+            parties[party_name] = 0
+    return parties
+
 def download_page(url):
+    """
+    Downloads the HTML content from the specified URL.
+    """
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
         print(f"Chyba při stahování stránky: {e}")
         return None
 
 def find_municipalities(url):
+    """
+    Finds municipality names, codes, and constructs detail URLs from a regional page.
+    """
     html = download_page(url)
     if not html:
         return None
 
     names = re.findall(PATTERNS["municipality_name"], html)
-    codes = re.findall(PATTERPs["municipality_code"], html)
+    codes = re.findall(PATTERNS["municipality_code"], html)
 
     if len(names) != len(codes):
         print("Počet obcí a kódů nesouhlasí, asi je stránka jiná než očekáváme.")
@@ -61,33 +99,10 @@ def find_municipalities(url):
         })
     return result
 
-def read_numbers(html):
-    def get_number(pattern):
-        match = re.search(pattern, html)
-        if match:
-            try:
-                return int(match.group(1).replace('&nbsp;', '').replace(' ', ''))
-            except ValueError:
-                return 0
-        return 0
-
-    return {
-        "voters": get_number(PATTERNS["voters"]),
-        "ballot_envelopes": get_number(PATTERNS["ballot_envelopes"]),
-        "valid_votes": get_number(PATTERNS["valid_votes"])
-    }
-
-def read_parties(html):
-    parties = {}
-    for found_match in PATTERNS["parties"].finditer(html):
-        party_name = found_match.group(2).strip()
-        try:
-            parties[party_name] = int(found_match.group(3).replace('&nbsp;', '').replace(' ', ''))
-        except ValueError:
-            parties[party_name] = 0
-    return parties
-
 def process_municipalities(municipality_list):
+    """
+    Iterates through municipalities, downloads detail pages, and extracts data.
+    """
     processed_data = []
     for municipality in municipality_list:
         print(f"Zpracovávám obec: {municipality['name']}")
@@ -100,6 +115,9 @@ def process_municipalities(municipality_list):
     return processed_data
 
 def save_csv(data, filename):
+    """
+    Saves the processed election data to a CSV file.
+    """
     if not data:
         print("Žádná data k uložení.")
         return
@@ -130,6 +148,9 @@ def save_csv(data, filename):
         print(f"Chyba při ukládání CSV: {e}")
 
 def main():
+    """
+    Main function to run the scraper.
+    """
     if len(sys.argv) != 3:
         print("Použití: python skript.py <URL_HLAVNI_STRANKY> <NAZEV_CSV>")
         sys.exit(1)
